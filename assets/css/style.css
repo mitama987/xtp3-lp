@@ -150,7 +150,8 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
 .pain { padding: 80px 0 60px; background: var(--paper-2); }
 .pain h2 { margin-bottom: 36px; }
 .pain-keyvisual { margin: 0; }
-.pain-keyvisual img {
+.pain-keyvisual img,
+.section-keyvisual img {
   display: block;
   width: 100%;
   max-width: 1080px;
@@ -160,6 +161,24 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
   border: 1px solid var(--line);
   box-shadow: var(--shadow-1);
 }
+.section-keyvisual { margin: 36px 0 0; }
+
+/* PRICING: image + slim CTA row */
+.plan-cta-row {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  justify-content: center; margin-top: 28px;
+}
+
+/* ADDONS: image + compact link list */
+.addon-cta-list {
+  list-style: none; padding: 0; margin: 24px 0 0;
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+  justify-content: center;
+}
+.addon-cta-list a {
+  font-size: 13px; font-weight: 600; color: var(--accent-d);
+}
+.addon-cta-list a:hover { color: var(--accent); }
 
 /* ============================================================
    Why
