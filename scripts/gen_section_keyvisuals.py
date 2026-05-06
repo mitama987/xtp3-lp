@@ -1,19 +1,25 @@
-"""Generate 5 LP section keyvisuals via OpenAI gpt-image-2 in the existing brand tone.
+"""Generate per-item LP card images via OpenAI gpt-image-2 in the brand tone.
 
-紙白×インク黒×くすみオレンジ+モダンサンセリフを継承して、各セクションを 16:9 (1536x1024)
-の集合キービジュアルに統合する。
+紙白×インク黒×くすみオレンジ+モダンサンセリフを継承し、各セクションを
+1024x1024 の正方形カード画像に分解生成する。
 
 Usage:
-    uv run --with pillow python scripts/gen_section_keyvisuals.py [section ...]
+    uv run --with pillow python scripts/gen_section_keyvisuals.py
+    uv run --with pillow python scripts/gen_section_keyvisuals.py pain
+    uv run --with pillow python scripts/gen_section_keyvisuals.py pain.01
+    uv run --with pillow python scripts/gen_section_keyvisuals.py pain.manual
+    uv run --with pillow python scripts/gen_section_keyvisuals.py pain.01 metrics.01 --force
 
-引数なしの場合は全セクションを順に生成。引数で `why features metrics addons pricing` を
-個別指定すれば部分生成・再生成が可能。
+引数なしで全 21 枚を順次生成。section 単独で当該セクション全枚、`section.NN` で
+インデックス完全一致、`section.<token>` で slug 部分一致。`--force` で既存上書き。
 """
 from __future__ import annotations
 
 import base64
 import json
 import sys
+import time
+import urllib.error
 import urllib.request
 from io import BytesIO
 from pathlib import Path
@@ -23,125 +29,262 @@ from PIL import Image
 DATA_JSON = Path(
     r"C:\Users\mitam\Desktop\work\50_ブログ\.obsidian\plugins\buzzblog-generator\data.json"
 )
-OUT_DIR = Path(__file__).resolve().parent.parent / "assets" / "images"
+OUT_DIR = Path(__file__).resolve().parent.parent / "assets" / "images" / "items"
 
-SHARED_TONE = """世界観: ブランド既存トーンを厳守。
-- 背景: 紙白 (#F5F1E6) のフラットマット紙質。極々淡いドット/罫線テクスチャを薄く敷くだけ。グラデネオン・3D・グラスモーフィズム・絵文字・ノイズはNG。
+SHARED_TONE = """世界観: ブランド既存トーン厳守。
+- 背景: 紙白 (#F5F1E6) のフラットマット紙質。極々淡い罫線/ドットを薄く敷くだけ。グラデネオン・3D・グラスモーフィズム・絵文字・ノイズはNG。
 - 主インク色: 深い黒 (#1A1A1A)。
-- アクセント色: くすみオレンジ (#E8632B) を要所のみ（数字/キーワード/ミニマル線画アイコン）。
+- アクセント色: くすみオレンジ (#E8632B)。重要キーワードや小アイコンの線色のみに使う。
 - フォント: モダンな日本語サンセリフ (Noto Sans JP / Inter ベース、極太)。明朝NG。
 - トーン: Notion / Stripe / Linear に近い品の良いミニマル LP イラスト。フォトリアルNG、ベクター線画+タイポグラフィ表現。
-- 四辺に 80px 程度のセーフエリア確保。
-- 日本語を正確に描画。ローマ字混入NG・誤字NG。"""
+- 日本語を正確に描画。ローマ字混入NG・誤字NG。
+- 1024x1024 正方形。四辺に 64px のセーフエリア確保。カード自身の枠線・影は描かない (HTML 側で付与)。"""
 
-SECTIONS = {
-    "why": {
-        "filename": "why_keyvisual",
-        "prompt": f"""日本のSaaS LP用 "選ばれる3つの理由" を 1 枚に統合した、横長 16:9 (1536x1024) のキービジュアル画像。
+
+def standard_prompt(item: dict, index_label: str) -> str:
+    accent = item.get("accent")
+    accent_note = (
+        f"見出しのうち「{accent}」だけはオレンジ #E8632B で強調。それ以外は黒。"
+        if accent
+        else "見出しは黒。"
+    )
+    return f"""日本のSaaS LP用カード 1 枚 (1024x1024)。
 
 {SHARED_TONE}
 
-レイアウト:
-- 上部中央に小さな "Why XToolsPro3" 系のオレンジeyebrowラベル
-- 1行3カラム。各カラムは中央寄せ、各カラム間は薄い 1px 縦罫線 (#D4CDBA)。
-- 各カラム上部にミニマル線画アイコン、左上に "01"〜"03" のオレンジ数字、その下に黒の極太見出し、最下部に小さい補足文 (黒70%)。
+レイアウト (中央寄せ縦組み):
+- 左上に小さなオレンジの 2 桁インデックス「{index_label}」(80pt 程度)。
+- 上 1/3 中央: ミニマル線画アイコン「{item['icon']}」(オレンジ単色 #E8632B、ストローク 6–8px、塗り無し)。
+- 中央: 黒の極太見出し 1 行「{item['title']}」(60–80pt 相当)。{accent_note}
+- 下 1/4 中央: 黒70%の補足文 1〜2 行「{item['note']}」(28–34pt 相当、line-height 1.5)。"""
 
-カラム内容（日本語を正確に）:
-- 01: アイコン=Xロゴ+鍵 / 見出し=「API不要、IDとパスだけ。」 / 補足=「面倒なAPI申請ゼロ」
-- 02: アイコン=複数ポストカードがランダム時刻で散らばる線画 / 見出し=「ランダム投稿で エンゲージメント 2.5倍。」（"2.5倍" だけオレンジで強調） / 補足=「100件プールから人間らしい間隔で配信」
-- 03: アイコン=¥0永続バッジ / 見出し=「全プラン 買い切り、月額ゼロ。」（"買い切り" だけオレンジ強調） / 補足=「サブスクなし・永続ライセンス」
-""",
+
+def metrics_prompt(item: dict, index_label: str) -> str:
+    return f"""日本のSaaS LP用 "実績メトリクスカード" 1 枚 (1024x1024)。
+
+{SHARED_TONE}
+
+レイアウト (中央寄せ縦組み):
+- 左上に小さなオレンジの 2 桁インデックス「{index_label}」(80pt 程度)。
+- 上 1/4 中央: 関連する小さめのミニマル線画アイコン「{item['icon']}」(オレンジ単色)。
+- 中央: 巨大なオレンジ #E8632B 極太数字「{item['big']}」(画像高の 40% 程度、340–420pt 相当)。
+- 下 1/4 中央: 黒の補足文 2 行「{item['note']}」(28–34pt 相当、line-height 1.5)。重要語「{item.get('accent', '')}」は黒の極太で。"""
+
+
+def addon_prompt(item: dict, index_label: str) -> str:
+    return f"""日本のSaaS LP用 "アドオンパックカード" 1 枚 (1024x1024)。
+
+{SHARED_TONE}
+
+レイアウト (中央寄せ縦組み):
+- 左上に小さなオレンジの 2 桁インデックス「{index_label}」(80pt 程度)。
+- 上 1/3 中央: ミニマル線画アイコン「{item['icon']}」(オレンジ単色 #E8632B)。
+- 中央上段: 黒の極太でパック名「{item['name']}」(54–62pt 相当、line-height 1.2)。
+- 中央下段: オレンジ #E8632B の極太価格「{item['price']}」(72–80pt 相当)。
+- 下 1/4 中央: 黒70%の補足文 1 行「{item['note']}」(26–32pt 相当)。"""
+
+
+SECTIONS: dict[str, dict] = {
+    "pain": {
+        "filename_prefix": "pain",
+        "template": "standard",
+        "items": [
+            {
+                "slug": "manual",
+                "icon": "カレンダーと疲れた砂時計の組み合わせ線画",
+                "title": "毎日の手動投稿、もう限界。",
+                "note": "24時間気を張り続けても、伸びない。",
+                "accent": "もう限界",
+            },
+            {
+                "slug": "api_cost",
+                "icon": "札束の上に大きな『$200』タグが乗ったAPI線画",
+                "title": "X API は月 200 ドル。",
+                "note": "個人で払い続けるには重すぎる。",
+                "accent": "200 ドル",
+            },
+            {
+                "slug": "freeze",
+                "icon": "鎖でつながれた3つのアカウントカードに赤橙のヒビが入った線画",
+                "title": "同 IP で芋づる凍結。",
+                "note": "資産アカウントが一晩で消える恐怖。",
+                "accent": "芋づる凍結",
+            },
+            {
+                "slug": "dm_late",
+                "icon": "未読バッジ付きDM受信箱と砂時計の線画",
+                "title": "DM 返信が、間に合わない。",
+                "note": "アクティブ時間にしか返せず、機会損失。",
+                "accent": "間に合わない",
+            },
+        ],
+    },
+    "why": {
+        "filename_prefix": "why",
+        "template": "standard",
+        "items": [
+            {
+                "slug": "no_api",
+                "icon": "Xのロゴと鍵の線画",
+                "title": "API 不要、ID とパスだけ。",
+                "note": "面倒な API 申請ゼロ。すぐ始まる。",
+                "accent": "API 不要",
+            },
+            {
+                "slug": "random_x25",
+                "icon": "ランダムな時刻に散らばる4枚の投稿カードの線画",
+                "title": "ランダム投稿で 2.5 倍。",
+                "note": "100 件プールから人間らしい間隔で配信。",
+                "accent": "2.5 倍",
+            },
+            {
+                "slug": "one_time",
+                "icon": "¥0 と書かれた永続バッジの線画",
+                "title": "全プラン 買い切り、月額ゼロ。",
+                "note": "サブスクなし、永続ライセンス。",
+                "accent": "買い切り",
+            },
+        ],
     },
     "features": {
-        "filename": "features_keyvisual",
-        "prompt": f"""日本のSaaS LP用 "主要機能" を 1 枚に統合した、横長 16:9 (1536x1024) のキービジュアル画像。
-
-{SHARED_TONE}
-
-レイアウト:
-- 上部中央に "主要機能 / Features" の小さなオレンジeyebrow。
-- 3列 × 2行のグリッド (合計6セル)。各セル間に薄い 1px 仕切り線 (#D4CDBA)。
-- 各セル: 上部にミニマル線画アイコン、その下に黒の極太見出し1行、さらに下に1〜2行の小さな補足文 (黒70%)。
-
-セル内容（日本語を正確に。"機能名:補足" の形式で）:
-- ランダム投稿エンジン / 100件プール × 重複防止 × 時間ランダマイザー
-- アカウント別プロキシ / 連鎖凍結を防ぐ多重IP分散
-- コミュニティ自動投稿 / Xコミュニティへ濃いユーザーへ届ける
-- 自動DM返信 / 受信DM＋リクエスト承認をテンプレ自動化
-- Amazon在庫復活アラート / Keepa連携で復活瞬間に自動投稿
-- AI投稿生成 / GPT-4o & Gemini で投稿文を量産
-""",
+        "filename_prefix": "features",
+        "template": "standard",
+        "items": [
+            {
+                "slug": "random_engine",
+                "icon": "シャッフル矢印が交差した線画",
+                "title": "ランダム投稿エンジン",
+                "note": "100件プール × 重複防止 × 時間ランダマイザー。",
+                "accent": "ランダム",
+            },
+            {
+                "slug": "proxy",
+                "icon": "中央ノードから3本のIP分岐が伸びる線画",
+                "title": "アカウント別プロキシ",
+                "note": "連鎖凍結を防ぐ多重 IP 分散。",
+                "accent": "多重 IP 分散",
+            },
+            {
+                "slug": "community",
+                "icon": "同心円で結ばれたコミュニティのアイコン線画",
+                "title": "コミュニティ自動投稿",
+                "note": "X コミュニティの濃いユーザーへ届ける。",
+                "accent": "コミュニティ",
+            },
+            {
+                "slug": "auto_dm",
+                "icon": "吹き出しと自動矢印マークの線画",
+                "title": "自動 DM 返信",
+                "note": "受信 DM ＋リクエスト承認をテンプレ化。",
+                "accent": "テンプレ化",
+            },
+            {
+                "slug": "amazon",
+                "icon": "段ボール箱と復活マークの線画",
+                "title": "Amazon 在庫復活アラート",
+                "note": "Keepa 連携で復活瞬間に自動投稿。",
+                "accent": "Keepa 連携",
+            },
+            {
+                "slug": "ai_post",
+                "icon": "スパークル付きペンの線画",
+                "title": "AI 投稿生成",
+                "note": "GPT-4o & Gemini で投稿文を量産。",
+                "accent": "AI",
+            },
+        ],
     },
     "metrics": {
-        "filename": "metrics_keyvisual",
-        "prompt": f"""日本のSaaS LP用 "実績ハイライト" を 1 枚に統合した、横長 16:9 (1536x1024) のキービジュアル画像。
-
-{SHARED_TONE}
-
-レイアウト:
-- 上部中央に "実績ハイライト / Achievements" の小さなオレンジeyebrow。
-- 横並び3カラム。各カラム中央に巨大な数字 (黒・極太、もしくはアクセントオレンジ)、その下に小さい補足文 (黒)。
-- カラム間は薄い 1px 縦罫線 (#D4CDBA)。
-
-カラム内容（日本語を正確に）:
-- 01: 巨大な「3件」 / 補足=「フォロワー31人のサブ垢で、1日で3件成約 (合計¥15,000)」
-- 02: 巨大な「+900%」 / 補足=「1日150ポストを2ヶ月で、プロフィールアクセス9倍」
-- 03: 巨大な「18回/日」 / 補足=「ファン化長文+note誘導戦略で、過去最大のプロフクリック数」
-
-数字部分はオレンジ (#E8632B) で表示し視線を引く。
-""",
+        "filename_prefix": "metrics",
+        "template": "metrics",
+        "items": [
+            {
+                "slug": "sales_3",
+                "icon": "受注ベルの線画",
+                "big": "3 件",
+                "note": "フォロワー31人のサブ垢で、1日3件成約 (合計¥15,000)。",
+                "accent": "3件成約",
+            },
+            {
+                "slug": "growth_900",
+                "icon": "急上昇する折れ線グラフの線画",
+                "big": "+900%",
+                "note": "1日150ポストを2ヶ月で、プロフアクセス9倍。",
+                "accent": "9倍",
+            },
+            {
+                "slug": "clicks_18",
+                "icon": "クリックする指の線画",
+                "big": "18 回/日",
+                "note": "ファン化長文＋note誘導戦略で、過去最大のプロフクリック数。",
+                "accent": "過去最大",
+            },
+        ],
     },
     "addons": {
-        "filename": "addons_keyvisual",
-        "prompt": f"""日本のSaaS LP用 "アドオンパック5種" を 1 枚に統合した、横長 16:9 (1536x1024) のキービジュアル画像。
-
-{SHARED_TONE}
-
-レイアウト:
-- 上部中央に "アドオンパック / Add-ons" の小さなオレンジeyebrow と、メイン見出し「必要な機能だけ、あとから足せる。」 (黒・極太)。
-- 5カラム横並び。各カラムは紙白カード調、薄い 1px 枠線 (#D4CDBA)、角丸8px。
-- 各カラム: 上部にミニマル線画アイコン、その下にパック名 (黒・極太)、価格 (オレンジ・極太)、最下部に1行の概要 (黒70%)。
-
-カラム内容（日本語を正確に。絵文字は使わず線画で）:
-- AI生成パック / ¥4,000 / ランダム投稿+AI+スプシ取込
-- エンゲージメントパック / ¥4,000 / 自動いいね+フォロー+リプライ
-- マルチアカウントパック / ¥5,000 / プロキシ+一括登録+共通設定
-- コミュニティパック / ¥4,000 / コミュニティ自動投稿
-- Amazon在庫復活パック / ¥6,000 / Keepa連携+在庫監視+自動投稿
-""",
-    },
-    "pricing": {
-        "filename": "pricing_keyvisual",
-        "prompt": f"""日本のSaaS LP用 "3プラン横並び" を 1 枚に統合した、横長 16:9 (1536x1024) のキービジュアル画像。
-
-{SHARED_TONE}
-
-レイアウト:
-- 上部中央に "料金プラン / Pricing" の小さなオレンジeyebrow。
-- 3カラム横並びの "比較カード"。中央の "買い切り＋アドオン" カードは黒背景+白文字でひときわ目立つ (人気No.1 のオレンジ丸バッジを上端中央)。両脇は紙白背景。
-- 各カードは: 上部にプラン名 (小)、その下に巨大な価格 (極太)、その下に5〜6行の特徴箇条書き (チェックはオレンジ、非対応は薄グレーのダッシュ)。
-- 最下部に小さなボタン風の長方形 (テキスト1行) がカード幅で1つずつ。
-
-カード内容（日本語を正確に）:
-- 左: 無料版 / ¥0 (永続) / 定期投稿(基本)・1アカウント限定・期間制限なし・AI機能なし(×)・複数アカウント非対応(×) / ボタン風: 無料で始める
-- 中央 (黒背景・人気No.1バッジ): 買い切り＋アドオン / ¥2,980〜 (一括) / 全基本機能 無制限・複数アカウント対応・AIクレジット 1,000pt・アドオン1つ同梱・アドオン追加購入OK・永続ライセンス / ボタン風: このプランを購入
-- 右: フル買切り / ¥19,800 (一括) / 全機能+全5アドオン同梱・単品計¥23,000相当・¥3,200お得・AIクレジット 1,000pt・新機能の即時利用・永続ライセンス / ボタン風: フル装備で買う
-""",
+        "filename_prefix": "addons",
+        "template": "addon",
+        "items": [
+            {
+                "slug": "ai",
+                "icon": "スパークル＋ペンの線画",
+                "name": "AI 生成パック",
+                "price": "¥4,000",
+                "note": "ランダム投稿+AI+スプシ取込。",
+            },
+            {
+                "slug": "engagement",
+                "icon": "ハートと曲線矢印の線画",
+                "name": "エンゲージメントパック",
+                "price": "¥4,000",
+                "note": "自動いいね+フォロー+リプライ。",
+            },
+            {
+                "slug": "multi",
+                "icon": "重なった複数のアカウントカードの線画",
+                "name": "マルチアカウントパック",
+                "price": "¥5,000",
+                "note": "プロキシ+一括登録+共通設定。",
+            },
+            {
+                "slug": "community",
+                "icon": "同心円のコミュニティ線画",
+                "name": "コミュニティパック",
+                "price": "¥4,000",
+                "note": "コミュニティ自動投稿。",
+            },
+            {
+                "slug": "amazon",
+                "icon": "段ボール箱と復活マークの線画",
+                "name": "Amazon 在庫復活パック",
+                "price": "¥6,000",
+                "note": "Keepa 連携+在庫監視+自動投稿。",
+            },
+        ],
     },
 }
 
 
-def generate(name: str, cfg: dict, api_key: str, model: str) -> None:
-    prompt = SECTIONS[name]["prompt"]
-    fname = SECTIONS[name]["filename"]
-    out_png = OUT_DIR / f"{fname}.png"
-    out_webp = OUT_DIR / f"{fname}.webp"
+def build_prompt(section: str, item: dict, idx: int) -> str:
+    template = SECTIONS[section]["template"]
+    index_label = f"{idx + 1:02d}"
+    if template == "metrics":
+        return metrics_prompt(item, index_label)
+    if template == "addon":
+        return addon_prompt(item, index_label)
+    return standard_prompt(item, index_label)
 
+
+def output_paths(section: str, idx: int, item: dict) -> tuple[Path, Path]:
+    prefix = SECTIONS[section]["filename_prefix"]
+    base = f"{prefix}_{idx + 1:02d}_{item['slug']}"
+    return OUT_DIR / f"{base}.png", OUT_DIR / f"{base}.webp"
+
+
+def post_image(api_key: str, model: str, prompt: str) -> bytes:
     payload = json.dumps(
-        {"model": model, "prompt": prompt, "size": "1536x1024", "n": 1}
+        {"model": model, "prompt": prompt, "size": "1024x1024", "n": 1}
     ).encode()
-
-    print(f"[{name}] generating with {model} 1536x1024 ...", file=sys.stderr)
     req = urllib.request.Request(
         "https://api.openai.com/v1/images/generations",
         data=payload,
@@ -151,42 +294,116 @@ def generate(name: str, cfg: dict, api_key: str, model: str) -> None:
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            result = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        print(f"[{name}] HTTPError {e.code}: {body[:1500]}", file=sys.stderr)
-        raise
-
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        result = json.loads(resp.read())
     item = result["data"][0]
     if "b64_json" in item:
-        png_bytes = base64.b64decode(item["b64_json"])
+        return base64.b64decode(item["b64_json"])
+    with urllib.request.urlopen(item["url"], timeout=120) as r:
+        return r.read()
+
+
+def generate(section: str, idx: int, item: dict, api_key: str, model: str, force: bool) -> str:
+    out_png, out_webp = output_paths(section, idx, item)
+    label = f"{section}.{idx + 1:02d} {item['slug']}"
+    if out_png.exists() and out_webp.exists() and not force:
+        print(f"[{label}] skip (already exists, use --force to overwrite)", file=sys.stderr)
+        return "skip"
+
+    prompt = build_prompt(section, item, idx)
+    delays = [0, 2, 4, 8]
+    last_err: Exception | None = None
+    for attempt, delay in enumerate(delays):
+        if delay:
+            time.sleep(delay)
+        try:
+            print(f"[{label}] generating with {model} 1024x1024 (attempt {attempt + 1})...", file=sys.stderr)
+            png_bytes = post_image(api_key, model, prompt)
+            break
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            print(f"[{label}] HTTPError {e.code}: {body[:600]}", file=sys.stderr)
+            last_err = e
+            if e.code not in (429, 500, 502, 503, 504):
+                raise
+        except urllib.error.URLError as e:
+            print(f"[{label}] URLError: {e}", file=sys.stderr)
+            last_err = e
     else:
-        with urllib.request.urlopen(item["url"], timeout=120) as r:
-            png_bytes = r.read()
+        print(f"[{label}] failed after retries", file=sys.stderr)
+        raise last_err if last_err else RuntimeError(f"{label}: unknown error")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_png.write_bytes(png_bytes)
     Image.open(BytesIO(png_bytes)).convert("RGB").save(
         out_webp, "WEBP", quality=86, method=6
     )
-    print(f"[{name}] wrote {out_png.name} + {out_webp.name}")
+    print(f"[{label}] wrote {out_png.name} + {out_webp.name}")
+    return "ok"
+
+
+def expand_targets(args: list[str]) -> list[tuple[str, int, dict]]:
+    if not args:
+        targets: list[tuple[str, int, dict]] = []
+        for section, cfg in SECTIONS.items():
+            for idx, item in enumerate(cfg["items"]):
+                targets.append((section, idx, item))
+        return targets
+
+    targets = []
+    for raw in args:
+        if "." in raw:
+            section, token = raw.split(".", 1)
+        else:
+            section, token = raw, None
+        if section not in SECTIONS:
+            print(f"unknown section: {section} (valid: {list(SECTIONS)})", file=sys.stderr)
+            sys.exit(2)
+        items = SECTIONS[section]["items"]
+        if token is None:
+            for idx, item in enumerate(items):
+                targets.append((section, idx, item))
+            continue
+        if token.isdigit():
+            i = int(token) - 1
+            if not (0 <= i < len(items)):
+                print(f"index out of range: {raw}", file=sys.stderr)
+                sys.exit(2)
+            targets.append((section, i, items[i]))
+        else:
+            matched = [(idx, it) for idx, it in enumerate(items) if token in it["slug"]]
+            if not matched:
+                print(f"no slug matched: {raw}", file=sys.stderr)
+                sys.exit(2)
+            for idx, item in matched:
+                targets.append((section, idx, item))
+    return targets
 
 
 def main() -> int:
+    raw = sys.argv[1:]
+    force = "--force" in raw
+    args = [a for a in raw if a != "--force"]
+
     cfg = json.loads(DATA_JSON.read_text(encoding="utf-8"))
     api_key = cfg["openaiApiKey"]
     model = cfg.get("openaiImageModel", "gpt-image-2")
 
-    targets = sys.argv[1:] if len(sys.argv) > 1 else list(SECTIONS.keys())
-    unknown = [t for t in targets if t not in SECTIONS]
-    if unknown:
-        print(f"Unknown sections: {unknown}. Valid: {list(SECTIONS)}", file=sys.stderr)
-        return 2
+    targets = expand_targets(args)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    for name in targets:
-        generate(name, cfg, api_key, model)
+    failures: list[str] = []
+    for section, idx, item in targets:
+        try:
+            generate(section, idx, item, api_key, model, force)
+        except Exception as e:  # noqa: BLE001
+            failures.append(f"{section}.{idx + 1:02d} {item['slug']}: {e}")
+
+    if failures:
+        print("\nFAILED:", file=sys.stderr)
+        for f in failures:
+            print(f"  - {f}", file=sys.stderr)
+        return 1
     return 0
 
 
