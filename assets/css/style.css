@@ -149,23 +149,17 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
    ============================================================ */
 .pain { padding: 80px 0 60px; background: var(--paper-2); }
 .pain h2 { margin-bottom: 36px; }
-.pain-grid {
-  display: grid; gap: 16px;
-  grid-template-columns: repeat(4, 1fr);
-}
-.pain-card {
-  background: var(--paper);
-  border: 1px solid var(--line);
+.pain-keyvisual { margin: 0; }
+.pain-keyvisual img {
+  display: block;
+  width: 100%;
+  max-width: 1080px;
+  height: auto;
+  margin: 0 auto;
   border-radius: var(--r);
-  padding: 24px 20px;
-  position: relative;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
 }
-.pain-card span {
-  font-family: var(--serif); font-weight: 700;
-  color: var(--accent); font-size: 14px; letter-spacing: .12em;
-}
-.pain-card p { margin: 12px 0 0; font-size: 15px; line-height: 1.65; color: var(--ink-2); }
-.pain-card b { color: var(--ink); }
 
 /* ============================================================
    Why
@@ -475,7 +469,6 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
 
 @media (max-width: 640px) {
   .nav-links { display: none; }
-  .pain-grid { grid-template-columns: 1fr 1fr; }
   .why-grid, .feat-grid, .metric-grid { grid-template-columns: 1fr; }
   .addon-grid { grid-template-columns: 1fr; }
   .review-grid { grid-template-columns: 1fr; }
