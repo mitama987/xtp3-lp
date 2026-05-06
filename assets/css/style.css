@@ -377,7 +377,7 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
 .compare h2 { margin-bottom: 40px; }
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .cmp {
-  width: 100%; min-width: 640px;
+  width: 100%; min-width: 720px;
   border-collapse: separate; border-spacing: 0;
   background: var(--paper);
   border: 1px solid var(--line);
@@ -385,14 +385,21 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
   overflow: hidden;
 }
 .cmp th, .cmp td {
-  padding: 14px 18px; text-align: center; font-size: 14px;
+  padding: 22px 24px; text-align: center; font-size: 17px;
+  line-height: 1.55;
   border-bottom: 1px solid var(--line);
 }
-.cmp tbody th { text-align: left; color: var(--ink-2); font-weight: 600; background: var(--paper-2); }
-.cmp thead th { background: var(--ink); color: var(--paper); font-weight: 700; padding: 18px; }
+.cmp tbody th { text-align: left; color: var(--ink); font-weight: 700; background: var(--paper-2); font-size: 17px; }
+.cmp thead th { background: var(--ink); color: var(--paper); font-weight: 700; padding: 26px 24px; font-size: 19px; letter-spacing: .01em; }
 .cmp .hl { background: rgba(232,99,43,.06); color: var(--ink); font-weight: 700; }
 .cmp thead th.hl { background: var(--ink); color: var(--paper); }
 .cmp tbody tr:last-child th, .cmp tbody tr:last-child td { border-bottom: 0; }
+
+@media (max-width: 640px) {
+  .cmp th, .cmp td { padding: 16px 14px; font-size: 14px; }
+  .cmp thead th { padding: 18px 14px; font-size: 16px; }
+  .cmp tbody th { font-size: 14px; }
+}
 
 /* ============================================================
    Reviews
