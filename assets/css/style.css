@@ -16,8 +16,8 @@
   --deep:       #0F4C3A;   /* 深緑（差し色） */
   --hl:         #FFF1B8;   /* ハイライト（数字下線用） */
 
-  --serif: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --sans:  "Inter", "Noto Sans JP", -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --serif: "Segoe UI", "Noto Sans JP", system-ui, -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+  --sans:  "Segoe UI", "Noto Sans JP", system-ui, -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
 
   --r:  10px;       /* 角丸（控えめ） */
   --r-s: 6px;
@@ -264,8 +264,22 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
   position: relative;
 }
 .plan-feature {
+  background: var(--ink);
   border: 2px solid var(--ink);
   box-shadow: var(--shadow-2);
+  color: var(--paper);
+}
+.plan-feature .plan-name       { color: rgba(252,250,245,.72); }
+.plan-feature .plan-price      { color: var(--paper); }
+.plan-feature .plan-price span { color: rgba(252,250,245,.72); }
+.plan-feature .plan-feats li   { color: rgba(252,250,245,.86); }
+.plan-feature .plan-feats li::before {
+  border-left-color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.plan-feature .plan-badge {
+  background: var(--accent);
+  color: #fff;
 }
 .plan-badge {
   position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
