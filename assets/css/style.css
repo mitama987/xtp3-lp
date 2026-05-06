@@ -264,19 +264,19 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
   position: relative;
 }
 .plan-feature {
-  background: var(--ink);
   border: 2px solid var(--ink);
   box-shadow: var(--shadow-2);
+}
+.plan-feature .plan-header {
+  background: var(--ink);
   color: var(--paper);
+  margin: -32px -28px 24px;
+  padding: 28px 28px 22px;
+  border-radius: 8px 8px 0 0;
 }
-.plan-feature .plan-name       { color: rgba(252,250,245,.72); }
-.plan-feature .plan-price      { color: var(--paper); }
-.plan-feature .plan-price span { color: rgba(252,250,245,.72); }
-.plan-feature .plan-feats li   { color: rgba(252,250,245,.86); }
-.plan-feature .plan-feats li::before {
-  border-left-color: var(--accent);
-  border-bottom-color: var(--accent);
-}
+.plan-feature .plan-header .plan-name       { color: rgba(252,250,245,.72); margin: 0 0 6px; }
+.plan-feature .plan-header .plan-price      { color: var(--paper); margin: 0; }
+.plan-feature .plan-header .plan-price span { color: rgba(252,250,245,.72); }
 .plan-feature .plan-badge {
   background: var(--accent);
   color: #fff;
