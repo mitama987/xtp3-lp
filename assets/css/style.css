@@ -353,6 +353,7 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
 .cmp tbody th { text-align: left; color: var(--ink-2); font-weight: 600; background: var(--paper-2); }
 .cmp thead th { background: var(--ink); color: var(--paper); font-weight: 700; padding: 18px; }
 .cmp .hl { background: rgba(232,99,43,.06); color: var(--ink); font-weight: 700; }
+.cmp thead th.hl { background: var(--ink); color: var(--paper); }
 .cmp tbody tr:last-child th, .cmp tbody tr:last-child td { border-bottom: 0; }
 
 /* ============================================================
