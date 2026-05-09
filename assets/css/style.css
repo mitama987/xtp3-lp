@@ -470,6 +470,7 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
    ============================================================ */
 .reviews { padding: 96px 0; }
 .reviews h2 { margin-bottom: 40px; }
+.reviews-title { word-break: keep-all; overflow-wrap: anywhere; line-break: strict; }
 .review-stack {
   display: flex; flex-direction: column; gap: 24px;
   max-width: 720px; margin: 0 auto;
