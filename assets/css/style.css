@@ -101,10 +101,12 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
   border-bottom: 1px solid var(--line);
 }
 .nav {
-  display: flex; align-items: center; justify-content: flex-start;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 24px;
   height: 78px;
 }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 700; }
+.brand:hover { text-decoration: none; }
 .brand-mark {
   display: inline-grid; place-items: center;
   width: 40px; height: 40px;
@@ -113,6 +115,9 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
   border-radius: 8px;
 }
 .brand-name { font-family: var(--serif); font-weight: 700; font-size: 26px; letter-spacing: .02em; }
+.nav-links { display: flex; gap: 28px; margin-left: auto; }
+.nav-links a { color: var(--ink-2); font-size: 16px; font-weight: 600; }
+.nav-links a:hover { color: var(--ink); text-decoration: none; }
 
 /* ============================================================
    Hero
@@ -419,6 +424,15 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
   content: "•"; position: absolute; left: 2px; top: 0;
   color: var(--accent); font-weight: 900;
 }
+.addon-buy-link {
+  display: inline-block; margin-top: 10px;
+  font-size: 13px; font-weight: 700;
+  color: var(--accent-d);
+  border-bottom: 1px dashed var(--accent-d);
+  padding-bottom: 1px;
+  align-self: center;
+}
+.addon-buy-link:hover { color: var(--accent); border-color: var(--accent); text-decoration: none; }
 
 /* ============================================================
    Comparison Table
@@ -614,6 +628,7 @@ h3 { font-family: var(--sans); font-weight: 700; font-size: 18px; margin: 0 0 8p
 }
 
 @media (max-width: 640px) {
+  .nav-links { display: none; }
   .why-grid, .feat-grid, .metric-grid { grid-template-columns: 1fr; }
   .addon-grid { grid-template-columns: 1fr; }
   .sp-only { display: inline; }
